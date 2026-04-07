@@ -294,7 +294,7 @@ body {
     <div class="card" style="margin-bottom:0">
       <div class="card-head">토큰 수 비교 (방식별)</div>
       <div class="card-body">
-        <canvas id="t1BarChart" width="600" height="200"></canvas>
+        <div id="t1BarPlotly" style="width:100%;height:180px;"></div>
       </div>
     </div>
   </div>
@@ -345,6 +345,14 @@ body {
       <div class="card-body">
         <div id="plotlySim"></div>
       </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <div class="card-head">임베딩 계산기 — 원핫 × 임베딩 행렬 = 임베딩 벡터</div>
+    <div class="card-body" style="padding:16px;">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;" id="t2CalcWords"></div>
+      <div id="t2CalcResult" style="font-family:'IBM Plex Mono',monospace;font-size:.82rem;line-height:2;color:var(--text2);"></div>
     </div>
   </div>
 
@@ -548,49 +556,38 @@ function t1Tokenize() {
 }
 
 function t1DrawBarChart(charCount, wordCount, bpeCount) {
-  const canvas = document.getElementById('t1BarChart');
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
   const dk = isDark();
-  ctx.clearRect(0,0,W,H);
-  ctx.fillStyle = dk ? '#1c1c2e' : '#ffffff';
-  ctx.fillRect(0,0,W,H);
+  const bg = dk ? '#1c1c2e' : '#ffffff';
+  const textC = dk ? '#e8e8f0' : '#1a1a2e';
+  const gridC = dk ? '#333352' : '#eeeef2';
 
-  const data = [
-    {label:'글자', count:charCount, color:'#e63946'},
-    {label:'단어', count:wordCount, color:'#2979ff'},
-    {label:'BPE', count:bpeCount, color:'#2ecc71'}
+  const colors = ['#e63946','#2979ff','#2ecc71'];
+  const opacity = [
+    t1Mode==='char'?1:0.3,
+    t1Mode==='word'?1:0.3,
+    t1Mode==='bpe'?1:0.3
   ];
-  const maxVal = Math.max(...data.map(d=>d.count), 1);
-  const barH = 36, gap = 16, startY = 24, labelW = 60;
-  const maxBarW = W - labelW - 100;
 
-  ctx.fillStyle = dk ? '#aaa' : '#555';
-  ctx.font = '600 12px IBM Plex Mono';
-  ctx.textAlign = 'left';
-  ctx.fillText('토큰 수 비교', 16, 16);
-
-  data.forEach((d, i) => {
-    const y = startY + i * (barH + gap);
-    // label
-    ctx.fillStyle = dk ? '#ccc' : '#333';
-    ctx.font = '500 13px Noto Sans KR';
-    ctx.textAlign = 'right';
-    ctx.fillText(d.label, labelW - 8, y + barH/2 + 5);
-    // bg
-    ctx.fillStyle = dk ? '#333' : '#eee';
-    ctx.beginPath(); ctx.roundRect(labelW, y, maxBarW, barH, 8); ctx.fill();
-    // fill
-    const barW = Math.max((d.count / maxVal) * maxBarW, 4);
-    const isActive = (t1Mode === 'char' && i===0) || (t1Mode === 'word' && i===1) || (t1Mode === 'bpe' && i===2);
-    ctx.fillStyle = isActive ? d.color : d.color + '66';
-    ctx.beginPath(); ctx.roundRect(labelW, y, barW, barH, 8); ctx.fill();
-    // value
-    ctx.fillStyle = dk ? '#eee' : '#333';
-    ctx.font = '700 14px IBM Plex Mono';
-    ctx.textAlign = 'left';
-    ctx.fillText(d.count + '개', labelW + barW + 10, y + barH/2 + 5);
-  });
+  Plotly.react('t1BarPlotly',[{
+    y: ['글자','단어','BPE'],
+    x: [charCount, wordCount, bpeCount],
+    type: 'bar',
+    orientation: 'h',
+    text: [charCount+'개', wordCount+'개', bpeCount+'개'],
+    textposition: 'outside',
+    textfont: {family:'IBM Plex Mono', size:13, color:textC},
+    marker: {
+      color: colors.map((c,i)=>c+(opacity[i]===1?'':'55')),
+      line: {width:0}
+    }
+  }],{
+    paper_bgcolor:bg, plot_bgcolor:bg,
+    xaxis: {visible:false, range:[0, Math.max(charCount,wordCount,bpeCount)*1.4]},
+    yaxis: {color:textC, automargin:true},
+    margin:{l:50,r:20,t:8,b:8},
+    font:{family:'Noto Sans KR',size:13,color:textC},
+    bargap:0.35,
+  },{responsive:true, displayModeBar:false});
 }
 
 function bpeTokenize(text) {
@@ -620,24 +617,28 @@ function bpeTokenize(text) {
 }
 
 // ===== TAB 2: Embedding Space (3D Plotly) =====
-const t2Words = [
-  {word:'고양이', x:2.1, y:1.8, z:3.2, cat:'동물'},
-  {word:'개',     x:2.5, y:2.1, z:3.0, cat:'동물'},
-  {word:'토끼',   x:1.8, y:2.4, z:3.5, cat:'동물'},
-  {word:'새',     x:2.8, y:1.5, z:2.8, cat:'동물'},
-  {word:'물고기', x:2.0, y:2.8, z:2.5, cat:'동물'},
-  {word:'사과',   x:-2.0, y:-1.5, z:1.0, cat:'과일'},
-  {word:'바나나', x:-2.3, y:-1.8, z:0.7, cat:'과일'},
-  {word:'포도',   x:-1.7, y:-2.1, z:1.3, cat:'과일'},
-  {word:'딸기',   x:-2.5, y:-1.2, z:0.5, cat:'과일'},
-  {word:'자동차', x:1.0, y:-2.5, z:-2.0, cat:'탈것'},
-  {word:'비행기', x:1.5, y:-2.8, z:-2.5, cat:'탈것'},
-  {word:'자전거', x:0.7, y:-2.2, z:-1.5, cat:'탈것'},
-  {word:'버스',   x:1.3, y:-2.0, z:-2.3, cat:'탈것'},
-  {word:'행복',   x:-1.5, y:2.5, z:-1.8, cat:'감정'},
-  {word:'슬픔',   x:-1.8, y:2.8, z:-2.2, cat:'감정'},
-  {word:'분노',   x:-2.2, y:2.2, z:-1.5, cat:'감정'},
+// 120+ 단어, 10개 카테고리 — 클러스터 중심 + 랜덤 오프셋으로 생성
+const t2Categories = [
+  {cat:'동물', cx:4,cy:3,cz:4, words:['고양이','개','토끼','새','물고기','말','돼지','소','양','호랑이','사자','코끼리','원숭이','거북이','뱀']},
+  {cat:'과일', cx:-4,cy:-3,cz:2, words:['사과','바나나','포도','딸기','수박','복숭아','오렌지','키위','망고','체리','배','감','레몬','자두']},
+  {cat:'탈것', cx:2,cy:-4,cz:-4, words:['자동차','비행기','자전거','버스','기차','배','오토바이','택시','헬리콥터','트럭','스쿠터','지하철']},
+  {cat:'감정', cx:-3,cy:4,cz:-3, words:['행복','슬픔','분노','공포','놀람','사랑','불안','기쁨','외로움','설렘','질투','감사','후회']},
+  {cat:'음식', cx:-2,cy:-4,cz:-2, words:['피자','김밥','라면','치킨','햄버거','떡볶이','초밥','파스타','비빔밥','샌드위치','국수','카레']},
+  {cat:'학교', cx:4,cy:-2,cz:2, words:['수학','과학','영어','체육','음악','미술','역사','선생님','학생','교실','시험','숙제','급식']},
+  {cat:'자연', cx:-4,cy:2,cz:4, words:['산','바다','강','숲','하늘','구름','비','눈','바람','태양','달','별','꽃','나무']},
+  {cat:'직업', cx:3,cy:4,cz:-1, words:['의사','교사','요리사','경찰','소방관','과학자','프로그래머','디자이너','간호사','변호사','기자']},
+  {cat:'스포츠', cx:-1,cy:-2,cz:5, words:['축구','야구','농구','수영','테니스','배드민턴','골프','스키','태권도','탁구','배구']},
+  {cat:'기술', cx:1,cy:1,cz:-5, words:['컴퓨터','스마트폰','인터넷','인공지능','로봇','드론','VR','코딩','데이터','알고리즘','클라우드']},
 ];
+
+function srand2(s){return()=>{s=(s*16807+7)%2147483647;return s/2147483647;};}
+const rng2=srand2(777);
+const t2Words=[];
+t2Categories.forEach(c=>{
+  c.words.forEach(w=>{
+    t2Words.push({word:w, x:c.cx+(rng2()-.5)*2.5, y:c.cy+(rng2()-.5)*2.5, z:c.cz+(rng2()-.5)*2.5, cat:c.cat});
+  });
+});
 
 // One-hot positions: spread on axes
 const t2OnehotPos = t2Words.map((w, i) => {
@@ -650,8 +651,8 @@ const t2OnehotPos = t2Words.map((w, i) => {
   };
 });
 
-const catColors = {'동물':'#e63946','과일':'#2ecc71','탈것':'#2979ff','감정':'#9b59b6'};
-const catNames = ['동물','과일','탈것','감정'];
+const catColors = {'동물':'#e63946','과일':'#2ecc71','탈것':'#2979ff','감정':'#9b59b6','음식':'#e67e22','학교':'#1abc9c','자연':'#27ae60','직업':'#f39c12','스포츠':'#e74c3c','기술':'#3498db'};
+const catNames = ['동물','과일','탈것','감정','음식','학교','자연','직업','스포츠','기술'];
 let t2Mode = 'embed';
 let t2Selected = -1;
 
@@ -699,17 +700,15 @@ function t2Draw() {
       x: positions.map(p => p.x),
       y: positions.map(p => p.y),
       z: positions.map(p => p.z),
-      mode: 'markers+text',
+      mode: 'markers',
       type: 'scatter3d',
       name: cat,
       text: wordsInCat.map(w => w.word),
-      textposition: 'top center',
-      textfont: { family: 'Noto Sans KR', size: 12, color: textColor },
       marker: {
-        size: t2Mode === 'embed' ? 10 : 7,
+        size: t2Mode === 'embed' ? 6 : 4,
         color: catColors[cat],
-        opacity: t2Mode === 'embed' ? 0.9 : 0.5,
-        line: { width: 1, color: dk ? '#fff' : '#333' }
+        opacity: t2Mode === 'embed' ? 0.85 : 0.4,
+        line: { width: 0.5, color: dk ? '#fff' : '#333' }
       },
       hovertemplate: '<b>%{text}</b><br>카테고리: ' + cat + '<extra></extra>'
     });
@@ -834,6 +833,50 @@ function t2ClearSim() {
     xaxis: { visible: false }, yaxis: { visible: false }
   }, { responsive: true, displayModeBar: false });
 }
+
+// ===== Embedding Calculator =====
+function t2InitCalc() {
+  // Show first 20 words as clickable chips
+  const container = document.getElementById('t2CalcWords');
+  if (!container) return;
+  const sample = t2Words.slice(0, 20);
+  container.innerHTML = sample.map((w, i) =>
+    `<button class="chip" style="padding:4px 12px;font-size:.72rem;" onclick="t2ShowCalc(${i})">${w.word}</button>`
+  ).join('');
+  document.getElementById('t2CalcResult').innerHTML = '<span style="color:var(--text3)">위에서 단어를 선택하면 원핫 × 임베딩 행렬 계산 과정을 보여줍니다.</span>';
+}
+
+function t2ShowCalc(idx) {
+  const w = t2Words[idx];
+  const n = Math.min(t2Words.length, 20);
+  // One-hot vector
+  const onehot = Array(n).fill(0); onehot[idx] = 1;
+  const oh = '[' + onehot.map(v => `<span style="color:${v?'var(--accent)':'var(--text3)'};font-weight:${v?'700':'400'}">${v}</span>`).join(', ') + ']';
+  // Embedding matrix (show only the selected row highlighted)
+  const rows = t2Words.slice(0, n).map((tw, i) => {
+    const hl = i === idx;
+    const style = hl ? 'background:var(--accent);color:#fff;padding:1px 4px;border-radius:3px;font-weight:700' : 'color:var(--text3)';
+    return `<span style="${style}">[${tw.x.toFixed(1)}, ${tw.y.toFixed(1)}, ${tw.z.toFixed(1)}]</span>`;
+  });
+  const result = `[<strong style="color:var(--accent)">${w.x.toFixed(1)}</strong>, <strong style="color:var(--accent)">${w.y.toFixed(1)}</strong>, <strong style="color:var(--accent)">${w.z.toFixed(1)}</strong>]`;
+
+  document.getElementById('t2CalcResult').innerHTML = `
+    <div style="margin-bottom:6px"><strong>"${w.word}"</strong>의 임베딩 계산:</div>
+    <div style="margin-bottom:4px"><span style="color:var(--accent2)">원핫 벡터:</span> ${oh}</div>
+    <div style="margin-bottom:4px"><span style="color:var(--accent2)">× 임베딩 행렬:</span> ${rows.join('<br>&nbsp;&nbsp;&nbsp;')}</div>
+    <div style="margin-top:6px;padding:8px 12px;background:var(--bg3);border-radius:6px;">
+      <span style="color:var(--accent2)">= 임베딩 벡터:</span> <strong style="font-size:1rem">${result}</strong>
+      <br><span style="font-size:.75rem;color:var(--text3)">→ 원핫의 1이 있는 위치의 행을 그대로 꺼냅니다. 이것이 임베딩의 본질!</span>
+    </div>`;
+
+  // Also select in 3D plot
+  t2Selected = idx;
+  document.getElementById('t2SelWord').textContent = w.word;
+  t2DrawSimilarity(idx);
+}
+
+// Initialize calculator when tab 2 is shown
+setTimeout(t2InitCalc, 200);
 
 // ===== TAB 3: Attention (Canvas heatmap) =====
 const t3Sentences = [
