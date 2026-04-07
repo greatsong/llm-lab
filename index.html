@@ -1057,35 +1057,38 @@ function tEDraw3D(result) {
     });
   });
 
-  // A point (red, large)
+  // A point (red)
   traces.push({x:[a.x],y:[a.y],z:[a.z], mode:'markers+text', type:'scatter3d',
-    text:['A: '+result.aWord], textposition:'top center', textfont:{size:13,color:'#e63946'},
-    marker:{size:14,color:'#e63946',line:{width:2,color:'#fff'}}, showlegend:false});
+    text:['A: '+result.aWord], textposition:'top right', textfont:{size:11,color:'#e63946'},
+    marker:{size:6,color:'#e63946',line:{width:1,color:'#fff'}}, showlegend:false});
   // B point (orange)
   traces.push({x:[b.x],y:[b.y],z:[b.z], mode:'markers+text', type:'scatter3d',
-    text:['−B: '+result.bWord], textposition:'top center', textfont:{size:13,color:'#e67e22'},
-    marker:{size:14,color:'#e67e22',line:{width:2,color:'#fff'}}, showlegend:false});
+    text:['−B: '+result.bWord], textposition:'top left', textfont:{size:11,color:'#e67e22'},
+    marker:{size:6,color:'#e67e22',line:{width:1,color:'#fff'}}, showlegend:false});
   // C point (blue)
   traces.push({x:[c.x],y:[c.y],z:[c.z], mode:'markers+text', type:'scatter3d',
-    text:['+C: '+result.cWord], textposition:'top center', textfont:{size:13,color:'#2979ff'},
-    marker:{size:14,color:'#2979ff',line:{width:2,color:'#fff'}}, showlegend:false});
+    text:['+C: '+result.cWord], textposition:'bottom right', textfont:{size:11,color:'#2979ff'},
+    marker:{size:6,color:'#2979ff',line:{width:1,color:'#fff'}}, showlegend:false});
   // Result vector (green diamond)
   traces.push({x:[rv.x],y:[rv.y],z:[rv.z], mode:'markers+text', type:'scatter3d',
-    text:['결과 벡터'], textposition:'top center', textfont:{size:12,color:'#2ecc71'},
-    marker:{size:16,color:'#2ecc71',symbol:'diamond',line:{width:3,color:'#fff'}}, showlegend:false});
-  // Best match (gold star)
+    text:['= 결과'], textposition:'top center', textfont:{size:11,color:'#2ecc71'},
+    marker:{size:8,color:'#2ecc71',symbol:'diamond',line:{width:2,color:'#fff'}}, showlegend:false});
+  // Best match (gold)
   if(bestW) {
     traces.push({x:[bestW.x],y:[bestW.y],z:[bestW.z], mode:'markers+text', type:'scatter3d',
-      text:['★ '+best.word], textposition:'bottom center', textfont:{size:14,color:'#f1c40f'},
-      marker:{size:14,color:'#f1c40f',symbol:'diamond',line:{width:2,color:'#fff'}}, showlegend:false});
-    // Dashed line: result → best match
+      text:['★ '+best.word], textposition:'bottom center', textfont:{size:11,color:'#f1c40f'},
+      marker:{size:7,color:'#f1c40f',symbol:'diamond',line:{width:1,color:'#fff'}}, showlegend:false});
     traces.push({x:[rv.x,bestW.x],y:[rv.y,bestW.y],z:[rv.z,bestW.z], mode:'lines', type:'scatter3d',
-      line:{color:'#2ecc71',width:4,dash:'dash'}, showlegend:false, hoverinfo:'skip'});
+      line:{color:'#2ecc71',width:2,dash:'dash'}, showlegend:false, hoverinfo:'skip'});
   }
 
-  // Arrow: A → Result (solid line showing the operation)
-  traces.push({x:[a.x, rv.x], y:[a.y, rv.y], z:[a.z, rv.z],
-    mode:'lines', type:'scatter3d', line:{color:'#9b59b6',width:5}, showlegend:false, hoverinfo:'skip'});
+  // Lines: A→B (orange), B→C (blue), C→Result (green)
+  traces.push({x:[a.x,b.x],y:[a.y,b.y],z:[a.z,b.z], mode:'lines', type:'scatter3d',
+    line:{color:'#e67e22',width:3}, showlegend:false, hoverinfo:'skip'});
+  traces.push({x:[b.x,c.x],y:[b.y,c.y],z:[b.z,c.z], mode:'lines', type:'scatter3d',
+    line:{color:'#2979ff',width:3}, showlegend:false, hoverinfo:'skip'});
+  traces.push({x:[c.x,rv.x],y:[c.y,rv.y],z:[c.z,rv.z], mode:'lines', type:'scatter3d',
+    line:{color:'#2ecc71',width:3}, showlegend:false, hoverinfo:'skip'});
 
   Plotly.react('plotlyAnalogy', traces, {
     paper_bgcolor:bg, plot_bgcolor:bg,
