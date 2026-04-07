@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM 실험실 — 토큰에서 GPT까지</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #f5f5f8; --bg2: #ffffff; --bg3: #eeeef2;
+  --border: #dcdce4; --text: #1a1a2e; --text2: #555; --text3: #888;
+  --accent: #e63946; --accent2: #2979ff; --shadow: rgba(0,0,0,0.06);
+  --card-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  --green: #2ecc71; --blue: #3498db; --orange: #e67e22; --red: #e74c3c;
+  --purple: #9b59b6; --teal: #1abc9c;
+}
+[data-theme="dark"] {
+  --bg: #12121c; --bg2: #1c1c2e; --bg3: #252540;
+  --border: #333352; --text: #e8e8f0; --text2: #aaa; --text3: #777;
+  --accent: #ff6b7a; --accent2: #5c9fff; --shadow: rgba(0,0,0,0.3);
+  --card-shadow: 0 2px 16px rgba(0,0,0,0.3);
+  --green: #2dd4a8; --blue: #5c9fff; --orange: #f4a261; --red: #ff6b7a;
+  --purple: #b388ff; --teal: #4dd0e1;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'Noto Sans KR', -apple-system, sans-serif;
+  line-height: 1.6; transition: background .3s, color .3s;
+  overflow-x: hidden;
+}
+
+.topnav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px; border-bottom: 1px solid var(--border);
+  background: var(--bg2); position: sticky; top: 0; z-index: 100;
+  box-shadow: var(--card-shadow);
+}
+.topnav-title {
+  font-size: .85rem; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.topnav-title span { font-size: 1.1rem; }
+.topnav-right { display: flex; align-items: center; gap: 12px; }
+
+.theme-toggle {
+  width: 48px; height: 26px; border-radius: 13px;
+  background: var(--bg3); border: 1px solid var(--border);
+  cursor: pointer; position: relative; transition: all .3s;
+}
+.theme-toggle::after {
+  content: ''; position: absolute; left: 3px; top: 2px;
+  width: 20px; height: 20px; border-radius: 10px;
+  background: var(--bg2); box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: all .3s;
+}
+[data-theme="dark"] .theme-toggle::after { left: 23px; }
+
+.tab-bar {
+  display: flex; gap: 0; padding: 16px 24px 0;
+  max-width: 1400px; margin: 0 auto; overflow-x: auto;
+}
+.tab-btn {
+  padding: 10px 28px; background: var(--bg2); color: var(--text3);
+  border: 1px solid var(--border); border-bottom: none;
+  cursor: pointer; font-size: .85rem; font-weight: 500;
+  border-radius: 10px 10px 0 0; transition: all .2s;
+  font-family: 'Noto Sans KR', sans-serif; white-space: nowrap;
+}
+.tab-btn:not(:first-child) { margin-left: -1px; }
+.tab-btn:hover { color: var(--text); background: var(--bg3); }
+.tab-btn.active {
+  background: var(--bg); color: var(--text); font-weight: 700;
+  border-bottom: 2px solid var(--bg); position: relative; z-index: 1;
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+.tab-body {
+  max-width: 1400px; margin: 0 auto;
+  border: 1px solid var(--border); border-top: none;
+  border-radius: 0 0 12px 12px; background: var(--bg);
+  padding: 24px; margin-bottom: 24px;
+}
+
+.ctrl-row {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  align-items: center; margin-bottom: 16px;
+}
+.ctrl-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: .7rem;
+  color: var(--text3); text-transform: uppercase; letter-spacing: .08em;
+  margin-right: 4px;
+}
+.chip {
+  padding: 6px 16px; border-radius: 20px;
+  border: 1.5px solid var(--border); background: var(--bg2);
+  color: var(--text2); cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace; font-size: .75rem;
+  transition: all .15s; font-weight: 500;
+}
+.chip:hover { border-color: var(--text3); color: var(--text); }
+.chip.active { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 600; }
+
+.slider-group { display: flex; align-items: center; gap: 8px; margin-left: 12px; }
+.slider-group input[type=range] { width: 160px; accent-color: var(--accent); }
+.slider-val {
+  font-family: 'IBM Plex Mono', monospace; font-size: .85rem;
+  font-weight: 600; color: var(--text); min-width: 36px;
+}
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+@media (max-width: 900px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .tab-btn { padding: 8px 16px; font-size: .78rem; }
+}
+
+.card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden; box-shadow: var(--card-shadow);
+}
+.card-head {
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  font-size: .75rem; color: var(--text2); font-weight: 500;
+}
+.card-body { padding: 0; position: relative; }
+.card-body canvas { width: 100%; display: block; }
+
+.info-box {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 16px; box-shadow: var(--card-shadow);
+}
+.info-tag {
+  font-family: 'IBM Plex Mono', monospace; font-size: .62rem;
+  color: var(--accent); text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: 6px;
+}
+.info-text {
+  font-size: .85rem; color: var(--text2); line-height: 1.8; font-weight: 300;
+}
+.info-text strong { color: var(--text); font-weight: 600; }
+
+/* Token boxes */
+.token-display {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 16px;
+  min-height: 60px; align-items: center;
+}
+.token-box {
+  padding: 6px 14px; border-radius: 8px; font-size: .85rem;
+  font-weight: 500; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; transition: all .3s;
+}
+.token-box .tid {
+  font-family: 'IBM Plex Mono', monospace; font-size: .6rem;
+  opacity: .6;
+}
+
+/* Embedding canvas */
+.embed-canvas-wrap { position: relative; }
+
+/* Attention heatmap */
+.attn-grid {
+  display: inline-grid; gap: 2px; padding: 16px;
+}
+.attn-cell {
+  width: 52px; height: 52px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'IBM Plex Mono', monospace; font-size: .7rem;
+  font-weight: 600; cursor: pointer; transition: all .2s;
+}
+.attn-label {
+  font-size: .72rem; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+  padding: 4px;
+}
+
+/* Prediction bars */
+.pred-bar-wrap { padding: 16px; }
+.pred-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  cursor: pointer; transition: all .2s;
+}
+.pred-row:hover { transform: translateX(4px); }
+.pred-word {
+  font-size: .85rem; font-weight: 600; width: 80px; text-align: right;
+  color: var(--text);
+}
+.pred-bar-bg {
+  flex: 1; height: 28px; background: var(--bg3); border-radius: 14px;
+  overflow: hidden; position: relative;
+}
+.pred-bar-fill {
+  height: 100%; border-radius: 14px; transition: width .5s ease;
+}
+.pred-pct {
+  font-family: 'IBM Plex Mono', monospace; font-size: .78rem;
+  font-weight: 600; color: var(--text); width: 48px;
+}
+
+/* Input field */
+.text-input {
+  width: 100%; padding: 10px 14px; border-radius: 8px;
+  border: 1.5px solid var(--border); background: var(--bg2);
+  color: var(--text); font-family: 'Noto Sans KR', sans-serif;
+  font-size: .9rem; margin-bottom: 12px; transition: border-color .2s;
+}
+.text-input:focus { outline: none; border-color: var(--accent2); }
+
+/* Generated sentence */
+.gen-sentence {
+  padding: 12px 16px; background: var(--bg3); border-radius: 8px;
+  font-size: .95rem; font-weight: 500; color: var(--text);
+  margin-bottom: 12px; min-height: 44px; line-height: 1.8;
+}
+.gen-word { transition: all .3s; }
+.gen-word.new { color: var(--accent); font-weight: 700; }
+
+.footer-section {
+  max-width: 900px; margin: 0 auto 40px; padding: 0 24px;
+}
+.footer-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 24px 28px; box-shadow: var(--card-shadow);
+}
+.footer-card h3 { font-size: 1rem; margin-bottom: 12px; }
+.footer-card p { font-size: .82rem; color: var(--text2); line-height: 1.8; }
+.footer-card p strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-title"><span>🔤</span> LLM 실험실 — 토큰에서 GPT까지</div>
+  <div class="topnav-right">
+    <div class="theme-toggle" onclick="toggleTheme()"></div>
+  </div>
+</nav>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab(0)">토큰화</button>
+  <button class="tab-btn" onclick="switchTab(1)">임베딩 공간</button>
+  <button class="tab-btn" onclick="switchTab(2)">어텐션</button>
+  <button class="tab-btn" onclick="switchTab(3)">다음 단어 예측</button>
+</div>
+
+<!-- ==================== TAB 1: 토큰화 ==================== -->
+<div class="tab-content active" id="tab0">
+<div class="tab-body">
+  <input class="text-input" id="t1Input" value="나는 오늘 학교에 갔다" placeholder="텍스트를 입력하세요" oninput="t1Tokenize()">
+
+  <div class="ctrl-row">
+    <span class="ctrl-label">분할 방식</span>
+    <button class="chip active" onclick="t1SetMode('char',this)">글자 단위</button>
+    <button class="chip" onclick="t1SetMode('word',this)">단어 단위</button>
+    <button class="chip" onclick="t1SetMode('bpe',this)">BPE 단위</button>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-head">토큰화 결과</div>
+    <div class="card-body">
+      <div class="token-display" id="t1Tokens"></div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <div class="info-tag">토큰화 정보</div>
+    <div class="info-text" id="t1Info">
+      <strong>글자 단위</strong>: 각 글자를 하나의 토큰으로 분리합니다. 사전 크기는 작지만 토큰 수가 많아집니다.
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== TAB 2: 임베딩 공간 ==================== -->
+<div class="tab-content" id="tab1">
+<div class="tab-body">
+  <div class="ctrl-row">
+    <span class="ctrl-label">표현 방식</span>
+    <button class="chip active" onclick="t2SetMode('embed',this)">임베딩</button>
+    <button class="chip" onclick="t2SetMode('onehot',this)">원핫 인코딩</button>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head" id="t2CanvasHead">2D 임베딩 공간</div>
+      <div class="card-body embed-canvas-wrap">
+        <canvas id="t2Canvas" width="600" height="500"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">유사도 (<span id="t2SelWord">단어를 클릭하세요</span>)</div>
+      <div class="card-body">
+        <canvas id="t2BarCanvas" width="600" height="500"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <div class="info-tag">임베딩 핵심</div>
+    <div class="info-text" id="t2Info">
+      <strong>임베딩 공간</strong>에서는 의미가 비슷한 단어끼리 가까이 모입니다. 단어를 클릭하면 다른 단어와의 유사도를 확인할 수 있습니다. <strong>임베딩 행렬도 가중치</strong>이며, 역전파로 학습됩니다.
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== TAB 3: 어텐션 ==================== -->
+<div class="tab-content" id="tab2">
+<div class="tab-body">
+  <div class="ctrl-row">
+    <span class="ctrl-label">문장 선택</span>
+    <button class="chip active" onclick="t3SetSentence(0,this)">나는 어제 학교에서 수학을 공부했다</button>
+    <button class="chip" onclick="t3SetSentence(1,this)">그 고양이는 물고기를 보고 달려갔다</button>
+    <button class="chip" onclick="t3SetSentence(2,this)">오늘 날씨가 좋아서 공원에 갔다</button>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-head">어텐션 히트맵 — 단어를 클릭하면 집중 대상이 강조됩니다</div>
+    <div class="card-body" style="overflow-x:auto;display:flex;justify-content:center;">
+      <div id="t3Heatmap"></div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <div class="info-tag">어텐션 해석</div>
+    <div class="info-text" id="t3Info">
+      <strong>어텐션</strong> = 각 단어가 문맥을 이해하기 위해 다른 단어에 부여하는 중요도. 색이 진할수록 더 많이 집중합니다. 어텐션 가중치도 학습으로 최적화됩니다.
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== TAB 4: 다음 단어 예측 ==================== -->
+<div class="tab-content" id="tab3">
+<div class="tab-body">
+  <div class="gen-sentence" id="t4Sentence">나는 오늘</div>
+
+  <div class="ctrl-row">
+    <span class="ctrl-label">Temperature</span>
+    <div class="slider-group">
+      <input type="range" id="t4Temp" min="1" max="20" value="7" oninput="t4UpdateTemp()">
+      <span class="slider-val" id="t4TempVal">0.7</span>
+    </div>
+    <button class="chip" onclick="t4Reset()" style="margin-left:auto;">초기화</button>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-head">다음 단어 후보 — 클릭하면 선택됩니다</div>
+    <div class="card-body">
+      <div class="pred-bar-wrap" id="t4Preds"></div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <div class="info-tag">LLM 작동 원리</div>
+    <div class="info-text" id="t4Info">
+      <strong>LLM = 어텐션으로 문맥을 파악한 뒤, 다음에 올 단어의 확률을 예측하는 기계.</strong> Temperature가 낮으면 가장 높은 확률의 단어만 선택하고, 높으면 다양한 단어가 선택될 수 있습니다. <strong>인공지능의 역사는 문제해결의 역사이고, 아이디어의 역사이고, 알고리즘의 역사입니다.</strong>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== Footer ==================== -->
+<div class="footer-section">
+  <div class="footer-card">
+    <h3>문제 → 아이디어 → 알고리즘</h3>
+    <p><strong>문제:</strong> 컴퓨터는 숫자만 아는데, 텍스트를 어떻게 이해시키나?<br>
+    <strong>아이디어:</strong> 단어를 의미가 담긴 숫자 공간에 배치하자<br>
+    <strong>알고리즘:</strong> 토큰화 → 임베딩 → 어텐션 → 트랜스포머<br><br>
+    <strong>토큰화 → 임베딩 → 어텐션 → 다음 단어 예측 = LLM</strong></p>
+  </div>
+</div>
+
+<script>
+// ===== Theme =====
+function toggleTheme() {
+  const d = document.documentElement;
+  d.setAttribute('data-theme', d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+}
+
+// ===== Tab switching =====
+function switchTab(idx) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===idx));
+  document.querySelectorAll('.tab-content').forEach((c,i) => c.classList.toggle('active', i===idx));
+  if (idx===1) t2Draw();
+  if (idx===2) t3Draw();
+  if (idx===3) t4Draw();
+}
+
+// ===== TAB 1: Tokenization =====
+let t1Mode = 'char';
+const t1Colors = ['#e63946','#2979ff','#2ecc71','#e67e22','#9b59b6','#1abc9c','#f39c12','#e74c3c','#3498db','#27ae60','#8e44ad','#d35400','#16a34a','#7c3aed'];
+
+function t1SetMode(mode, btn) {
+  t1Mode = mode;
+  btn.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  t1Tokenize();
+}
+
+function t1Tokenize() {
+  const text = document.getElementById('t1Input').value.trim();
+  if (!text) { document.getElementById('t1Tokens').innerHTML=''; return; }
+  let tokens = [];
+  if (t1Mode === 'char') {
+    tokens = text.split('').filter(c => c !== ' ');
+  } else if (t1Mode === 'word') {
+    tokens = text.split(/\s+/);
+  } else {
+    // BPE simulation
+    tokens = bpeTokenize(text);
+  }
+  const container = document.getElementById('t1Tokens');
+  container.innerHTML = '';
+  tokens.forEach((t, i) => {
+    const box = document.createElement('div');
+    box.className = 'token-box';
+    const bg = t1Colors[i % t1Colors.length];
+    box.style.background = bg + '22';
+    box.style.border = `1.5px solid ${bg}`;
+    box.style.color = bg;
+    box.innerHTML = `<span>${t}</span><span class="tid">${i}</span>`;
+    container.appendChild(box);
+  });
+
+  const info = document.getElementById('t1Info');
+  const modeNames = {char:'글자 단위', word:'단어 단위', bpe:'BPE 단위'};
+  const descs = {
+    char: `<strong>글자 단위</strong>: 각 글자를 하나의 토큰으로 분리합니다. 사전 크기는 작지만(한글 약 11,000자) 토큰 수가 <strong>${tokens.length}개</strong>로 많아집니다.`,
+    word: `<strong>단어 단위</strong>: 띄어쓰기 기준으로 분리합니다. 토큰 수는 <strong>${tokens.length}개</strong>로 적지만, "학교에"와 "학교는"이 다른 토큰이 됩니다.`,
+    bpe: `<strong>BPE(Byte Pair Encoding)</strong>: 자주 나오는 조합을 하나로 묶습니다. 토큰 수 <strong>${tokens.length}개</strong> — 사전 크기와 토큰 수의 균형. GPT가 사용하는 방식입니다.`
+  };
+  info.innerHTML = descs[t1Mode];
+}
+
+function bpeTokenize(text) {
+  // Simulated BPE for Korean
+  const common = ['나는','오늘','학교','에서','수학','공부','했다','갔다','먹었다','좋아서','날씨','가','를','을','에','는','이','의','한','다','고양이','물고기','비행기','자동차','자전거','사과','바나나','포도','어제','내일','선생님','학생'];
+  text = text.replace(/\s+/g,' ');
+  let tokens = [];
+  let remaining = text.replace(/ /g,'');
+  while (remaining.length > 0) {
+    let matched = false;
+    for (let len = Math.min(remaining.length, 4); len >= 2; len--) {
+      const sub = remaining.substring(0, len);
+      if (common.includes(sub)) {
+        tokens.push(sub);
+        remaining = remaining.substring(len);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      tokens.push(remaining[0]);
+      remaining = remaining.substring(1);
+    }
+  }
+  return tokens;
+}
+
+// ===== TAB 2: Embedding Space =====
+const t2Words = [
+  {word:'고양이', ex:0.78, ey:0.25, cat:'동물'},
+  {word:'개',     ex:0.72, ey:0.30, cat:'동물'},
+  {word:'새',     ex:0.60, ey:0.42, cat:'동물'},
+  {word:'물고기', ex:0.55, ey:0.48, cat:'동물'},
+  {word:'사과',   ex:0.22, ey:0.72, cat:'과일'},
+  {word:'바나나', ex:0.28, ey:0.78, cat:'과일'},
+  {word:'포도',   ex:0.18, ey:0.82, cat:'과일'},
+  {word:'자동차', ex:0.80, ey:0.80, cat:'탈것'},
+  {word:'비행기', ex:0.85, ey:0.88, cat:'탈것'},
+  {word:'자전거', ex:0.75, ey:0.75, cat:'탈것'},
+];
+const catColors = {'동물':'#e63946','과일':'#2ecc71','탈것':'#2979ff'};
+let t2Mode = 'embed';
+let t2Selected = -1;
+
+function t2SetMode(mode, btn) {
+  t2Mode = mode;
+  t2Selected = -1;
+  btn.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('t2CanvasHead').textContent = mode==='embed' ? '2D 임베딩 공간' : '원핫 인코딩 (축 위에 균등 배치)';
+  const info = document.getElementById('t2Info');
+  if (mode === 'onehot') {
+    info.innerHTML = '<strong>원핫 인코딩</strong>에서는 모든 단어가 축 위에 균등하게 배치됩니다. 어떤 두 단어를 비교해도 유사도가 <strong>0</strong>입니다. 의미적 관계가 완전히 사라집니다.';
+  } else {
+    info.innerHTML = '<strong>임베딩 공간</strong>에서는 의미가 비슷한 단어끼리 가까이 모입니다. 단어를 클릭하면 다른 단어와의 유사도를 확인할 수 있습니다. <strong>임베딩 행렬도 가중치</strong>이며, 역전파로 학습됩니다.';
+  }
+  document.getElementById('t2SelWord').textContent = '단어를 클릭하세요';
+  t2Draw();
+}
+
+function t2Draw() {
+  const canvas = document.getElementById('t2Canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = isDark ? '#1c1c2e' : '#ffffff';
+  ctx.fillRect(0,0,W,H);
+
+  const pad = 60;
+
+  if (t2Mode === 'embed') {
+    // Draw grid
+    ctx.strokeStyle = isDark ? '#333' : '#eee';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+      const x = pad + (W - 2*pad) * i / 10;
+      const y = pad + (H - 2*pad) * i / 10;
+      ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, H-pad); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W-pad, y); ctx.stroke();
+    }
+    // Draw cluster circles
+    const clusters = {};
+    t2Words.forEach(w => {
+      if (!clusters[w.cat]) clusters[w.cat] = [];
+      clusters[w.cat].push(w);
+    });
+    Object.entries(clusters).forEach(([cat, words]) => {
+      const cx = words.reduce((s,w)=>s+w.ex,0)/words.length;
+      const cy = words.reduce((s,w)=>s+w.ey,0)/words.length;
+      const px = pad + cx*(W-2*pad);
+      const py = H - pad - cy*(H-2*pad);
+      ctx.beginPath();
+      ctx.arc(px, py, 65, 0, Math.PI*2);
+      ctx.fillStyle = catColors[cat] + '15';
+      ctx.fill();
+      ctx.strokeStyle = catColors[cat] + '40';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+    // Draw words
+    t2Words.forEach((w, i) => {
+      const px = pad + w.ex * (W - 2*pad);
+      const py = H - pad - w.ey * (H - 2*pad);
+      ctx.beginPath();
+      ctx.arc(px, py, t2Selected === i ? 14 : 10, 0, Math.PI*2);
+      ctx.fillStyle = catColors[w.cat];
+      ctx.fill();
+      if (t2Selected === i) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+      ctx.fillStyle = isDark ? '#eee' : '#333';
+      ctx.font = '500 13px Noto Sans KR';
+      ctx.textAlign = 'center';
+      ctx.fillText(w.word, px, py - 18);
+    });
+    // Axis labels
+    ctx.fillStyle = isDark ? '#888' : '#999';
+    ctx.font = '12px IBM Plex Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText('차원 1', W/2, H - 15);
+    ctx.save();
+    ctx.translate(15, H/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('차원 2', 0, 0);
+    ctx.restore();
+  } else {
+    // One-hot: evenly spaced on a circle
+    const cx = W/2, cy = H/2, r = Math.min(W,H)/2 - 70;
+    t2Words.forEach((w, i) => {
+      const angle = (i / t2Words.length) * Math.PI * 2 - Math.PI/2;
+      const px = cx + r * Math.cos(angle);
+      const py = cy + r * Math.sin(angle);
+      ctx.beginPath();
+      ctx.arc(px, py, 10, 0, Math.PI*2);
+      ctx.fillStyle = '#888';
+      ctx.fill();
+      ctx.fillStyle = isDark ? '#ccc' : '#333';
+      ctx.font = '500 13px Noto Sans KR';
+      ctx.textAlign = 'center';
+      ctx.fillText(w.word, px, py - 18);
+    });
+    ctx.strokeStyle = isDark ? '#444' : '#ddd';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.fillStyle = isDark ? '#666' : '#aaa';
+    ctx.font = '12px IBM Plex Mono';
+    ctx.fillText('모든 단어가 같은 거리 — 유사도 = 0', cx, cy);
+  }
+
+  // Click handler
+  canvas.onclick = function(e) {
+    if (t2Mode !== 'embed') return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W / rect.width, scaleY = H / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+    t2Words.forEach((w, i) => {
+      const px = pad + w.ex * (W - 2*pad);
+      const py = H - pad - w.ey * (H - 2*pad);
+      if (Math.hypot(mx-px, my-py) < 20) {
+        t2Selected = i;
+        document.getElementById('t2SelWord').textContent = w.word;
+        t2Draw();
+        t2DrawBars(i);
+      }
+    });
+  };
+
+  if (t2Selected >= 0 && t2Mode === 'embed') t2DrawBars(t2Selected);
+  else t2ClearBars();
+}
+
+function dotProduct(a, b) {
+  return a.ex*b.ex + a.ey*b.ey;
+}
+
+function t2DrawBars(selIdx) {
+  const canvas = document.getElementById('t2BarCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = isDark ? '#1c1c2e' : '#ffffff';
+  ctx.fillRect(0,0,W,H);
+
+  const sel = t2Words[selIdx];
+  const sims = t2Words.map((w,i) => ({word:w.word, sim: i===selIdx ? -1 : (sel.ex*w.ex+sel.ey*w.ey), cat:w.cat, idx:i}))
+    .filter(s => s.sim >= 0)
+    .sort((a,b) => b.sim - a.sim);
+
+  const barH = 32, gap = 10, startY = 30, labelW = 90;
+  const maxBarW = W - labelW - 100;
+
+  ctx.fillStyle = isDark ? '#aaa' : '#555';
+  ctx.font = '600 13px Noto Sans KR';
+  ctx.textAlign = 'left';
+  ctx.fillText(`${sel.word}와(과)의 유사도`, 16, 20);
+
+  sims.forEach((s, i) => {
+    const y = startY + i * (barH + gap);
+    ctx.fillStyle = isDark ? '#ccc' : '#333';
+    ctx.font = '500 13px Noto Sans KR';
+    ctx.textAlign = 'right';
+    ctx.fillText(s.word, labelW - 10, y + barH/2 + 5);
+
+    const barW = (s.sim / 1.2) * maxBarW;
+    ctx.fillStyle = isDark ? '#333' : '#eee';
+    ctx.beginPath();
+    ctx.roundRect(labelW, y, maxBarW, barH, 8);
+    ctx.fill();
+
+    ctx.fillStyle = catColors[s.cat];
+    ctx.beginPath();
+    ctx.roundRect(labelW, y, Math.max(barW, 2), barH, 8);
+    ctx.fill();
+
+    ctx.fillStyle = isDark ? '#eee' : '#333';
+    ctx.font = '600 13px IBM Plex Mono';
+    ctx.textAlign = 'left';
+    ctx.fillText(s.sim.toFixed(2), labelW + barW + 8, y + barH/2 + 5);
+  });
+}
+
+function t2ClearBars() {
+  const canvas = document.getElementById('t2BarCanvas');
+  const ctx = canvas.getContext('2d');
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = isDark ? '#1c1c2e' : '#ffffff';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = isDark ? '#666' : '#aaa';
+  ctx.font = '14px Noto Sans KR';
+  ctx.textAlign = 'center';
+  ctx.fillText('왼쪽에서 단어를 클릭하세요', canvas.width/2, canvas.height/2);
+}
+
+// ===== TAB 3: Attention =====
+const t3Sentences = [
+  {words:['나는','어제','학교에서','수학을','공부했다'],
+   attn:[
+    [0.60,0.05,0.15,0.10,0.10],
+    [0.05,0.50,0.15,0.10,0.20],
+    [0.10,0.20,0.40,0.15,0.15],
+    [0.05,0.05,0.30,0.40,0.20],
+    [0.10,0.10,0.20,0.30,0.30]
+  ]},
+  {words:['그','고양이는','물고기를','보고','달려갔다'],
+   attn:[
+    [0.30,0.50,0.10,0.05,0.05],
+    [0.15,0.35,0.25,0.10,0.15],
+    [0.05,0.20,0.40,0.15,0.20],
+    [0.05,0.15,0.45,0.25,0.10],
+    [0.05,0.30,0.25,0.15,0.25]
+  ]},
+  {words:['오늘','날씨가','좋아서','공원에','갔다'],
+   attn:[
+    [0.50,0.20,0.15,0.10,0.05],
+    [0.25,0.40,0.20,0.10,0.05],
+    [0.10,0.35,0.30,0.15,0.10],
+    [0.05,0.10,0.25,0.40,0.20],
+    [0.05,0.10,0.20,0.30,0.35]
+  ]}
+];
+let t3Idx = 0;
+let t3SelRow = -1;
+
+function t3SetSentence(idx, btn) {
+  t3Idx = idx;
+  t3SelRow = -1;
+  btn.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  t3Draw();
+}
+
+function t3Draw() {
+  const s = t3Sentences[t3Idx];
+  const n = s.words.length;
+  const container = document.getElementById('t3Heatmap');
+  container.innerHTML = '';
+
+  const grid = document.createElement('div');
+  grid.className = 'attn-grid';
+  grid.style.gridTemplateColumns = `80px repeat(${n}, 52px)`;
+
+  // Header row
+  const corner = document.createElement('div');
+  corner.className = 'attn-label';
+  corner.style.fontSize = '.6rem';
+  corner.style.color = 'var(--text3)';
+  corner.textContent = '↓집중→대상';
+  grid.appendChild(corner);
+  s.words.forEach(w => {
+    const lbl = document.createElement('div');
+    lbl.className = 'attn-label';
+    lbl.style.fontSize = '.7rem';
+    lbl.textContent = w;
+    grid.appendChild(lbl);
+  });
+
+  // Data rows
+  s.words.forEach((rowWord, ri) => {
+    const rowLbl = document.createElement('div');
+    rowLbl.className = 'attn-label';
+    rowLbl.style.cursor = 'pointer';
+    rowLbl.style.fontSize = '.75rem';
+    rowLbl.style.borderRight = '2px solid var(--border)';
+    rowLbl.style.background = t3SelRow === ri ? 'var(--accent)' : 'transparent';
+    rowLbl.style.color = t3SelRow === ri ? '#fff' : 'var(--text)';
+    rowLbl.style.borderRadius = '4px';
+    rowLbl.textContent = rowWord;
+    rowLbl.onclick = () => { t3SelRow = ri; t3Draw(); };
+    grid.appendChild(rowLbl);
+
+    s.words.forEach((colWord, ci) => {
+      const val = s.attn[ri][ci];
+      const cell = document.createElement('div');
+      cell.className = 'attn-cell';
+      const intensity = Math.round(val * 255);
+      const isHighlight = t3SelRow === ri;
+      if (isHighlight) {
+        cell.style.background = `rgba(230,57,70,${val*1.2})`;
+        cell.style.color = val > 0.3 ? '#fff' : 'var(--text)';
+      } else {
+        cell.style.background = `rgba(41,121,255,${val*0.8})`;
+        cell.style.color = val > 0.3 ? '#fff' : 'var(--text)';
+      }
+      cell.textContent = val.toFixed(2);
+      cell.onclick = () => { t3SelRow = ri; t3Draw(); };
+      grid.appendChild(cell);
+    });
+  });
+
+  container.appendChild(grid);
+
+  // Update info
+  if (t3SelRow >= 0) {
+    const row = s.attn[t3SelRow];
+    const maxIdx = row.indexOf(Math.max(...row));
+    document.getElementById('t3Info').innerHTML =
+      `<strong>"${s.words[t3SelRow]}"</strong>가 가장 많이 집중하는 단어: <strong>"${s.words[maxIdx]}"</strong> (가중치 ${row[maxIdx].toFixed(2)}). 어텐션은 각 단어가 문맥을 이해하기 위해 다른 단어에 부여하는 중요도입니다.`;
+  }
+}
+
+// ===== TAB 4: Next Word Prediction =====
+const t4Tree = {
+  '나는 오늘': [
+    {word:'학교에', p:0.60},
+    {word:'집에', p:0.20},
+    {word:'공원에', p:0.10},
+    {word:'병원에', p:0.05},
+    {word:'시장에', p:0.05}
+  ],
+  '나는 오늘 학교에': [
+    {word:'갔다', p:0.55},
+    {word:'가서', p:0.25},
+    {word:'안', p:0.10},
+    {word:'늦게', p:0.07},
+    {word:'도착했다', p:0.03}
+  ],
+  '나는 오늘 집에': [
+    {word:'갔다', p:0.45},
+    {word:'있었다', p:0.30},
+    {word:'일찍', p:0.15},
+    {word:'혼자', p:0.07},
+    {word:'돌아왔다', p:0.03}
+  ],
+  '나는 오늘 공원에': [
+    {word:'갔다', p:0.50},
+    {word:'가서', p:0.25},
+    {word:'산책을', p:0.15},
+    {word:'앉아서', p:0.07},
+    {word:'도착했다', p:0.03}
+  ]
+};
+let t4Sentence = '나는 오늘';
+let t4Step = 0;
+const t4MaxSteps = 3;
+const barColors = ['#e63946','#2979ff','#2ecc71','#e67e22','#9b59b6'];
+
+function t4Reset() {
+  t4Sentence = '나는 오늘';
+  t4Step = 0;
+  document.getElementById('t4Sentence').innerHTML = t4Sentence;
+  t4Draw();
+}
+
+function t4UpdateTemp() {
+  const v = document.getElementById('t4Temp').value;
+  document.getElementById('t4TempVal').textContent = (v/10).toFixed(1);
+  t4Draw();
+}
+
+function t4Draw() {
+  const container = document.getElementById('t4Preds');
+  container.innerHTML = '';
+
+  if (t4Step >= t4MaxSteps) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2);">문장 생성 완료! "초기화"를 눌러 다시 시도하세요.</div>';
+    return;
+  }
+
+  let preds = t4Tree[t4Sentence];
+  if (!preds) {
+    // Default prediction for unknown sequences
+    preds = [
+      {word:'좋았다', p:0.40},
+      {word:'재미있었다', p:0.25},
+      {word:'힘들었다', p:0.15},
+      {word:'즐거웠다', p:0.12},
+      {word:'피곤했다', p:0.08}
+    ];
+  }
+
+  // Apply temperature
+  const temp = parseFloat(document.getElementById('t4Temp').value) / 10;
+  const adjusted = preds.map(p => ({word:p.word, p: Math.pow(p.p, 1/temp)}));
+  const sum = adjusted.reduce((s,p)=>s+p.p, 0);
+  adjusted.forEach(p => p.p = p.p/sum);
+  adjusted.sort((a,b) => b.p - a.p);
+
+  adjusted.forEach((pred, i) => {
+    const row = document.createElement('div');
+    row.className = 'pred-row';
+    row.onclick = () => t4Select(pred.word);
+    row.innerHTML = `
+      <span class="pred-word">${pred.word}</span>
+      <div class="pred-bar-bg">
+        <div class="pred-bar-fill" style="width:${pred.p*100}%;background:${barColors[i%barColors.length]}"></div>
+      </div>
+      <span class="pred-pct">${(pred.p*100).toFixed(1)}%</span>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function t4Select(word) {
+  t4Sentence += ' ' + word;
+  t4Step++;
+  const el = document.getElementById('t4Sentence');
+  const parts = t4Sentence.split(' ');
+  el.innerHTML = parts.map((w,i) => {
+    if (i >= parts.length - t4Step) return `<span class="gen-word new">${w}</span>`;
+    return `<span class="gen-word">${w}</span>`;
+  }).join(' ');
+  t4Draw();
+}
+
+// ===== Init =====
+t1Tokenize();
+t2Draw();
+
+// Polyfill roundRect for older browsers
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r) {
+    if (typeof r === 'number') r = {tl:r,tr:r,br:r,bl:r};
+    this.moveTo(x+r.tl, y);
+    this.lineTo(x+w-r.tr, y);
+    this.quadraticCurveTo(x+w, y, x+w, y+r.tr);
+    this.lineTo(x+w, y+h-r.br);
+    this.quadraticCurveTo(x+w, y+h, x+w-r.br, y+h);
+    this.lineTo(x+r.bl, y+h);
+    this.quadraticCurveTo(x, y+h, x, y+h-r.bl);
+    this.lineTo(x, y+r.tl);
+    this.quadraticCurveTo(x, y, x+r.tl, y);
+    this.closePath();
+    return this;
+  };
+}
+</script>
+</body>
+</html>
