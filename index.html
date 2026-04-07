@@ -762,7 +762,6 @@ function t2Draw() {
     if (idx >= 0) {
       t2Selected = idx;
       document.getElementById('t2SelWord').textContent = t2Words[idx].word;
-      t2Draw();
       t2DrawSimilarity(idx);
     }
   });
