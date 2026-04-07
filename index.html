@@ -786,8 +786,9 @@ function t2DrawSimilarity(selIdx) {
         : (0); // one-hot: similarity is 0
       return { word: w.word, sim: Math.max(s, 0), cat: w.cat };
     })
-    .filter(x => x !== null)
-    .sort((a, b) => b.sim - a.sim);
+    .filter(x => x !== null && x.sim > 0.01)
+    .sort((a, b) => b.sim - a.sim)
+    .slice(0, 20);
 
   const trace = {
     y: sims.map(s => s.word),
