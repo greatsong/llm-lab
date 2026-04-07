@@ -691,33 +691,61 @@ function bpeTokenize(text) {
 
 // ===== TAB 2: Embedding Space (3D Plotly) =====
 // 120+ 단어, 10개 카테고리 — 클러스터 중심 + 랜덤 오프셋으로 생성
-const t2Categories = [
-  // 나라-수도 관계 (같은 "수도 방향" 벡터 공유)
-  {cat:'나라', cx:5,cy:0,cz:3, words:['한국','일본','중국','미국','영국','프랑스','독일','이탈리아','스페인','브라질','호주','캐나다','인도','태국','멕시코']},
-  {cat:'수도', cx:5,cy:0,cz:6, words:['서울','도쿄','베이징','워싱턴','런던','파리','베를린','로마','마드리드','브라질리아','캔버라','오타와','뉴델리','방콕','멕시코시티']},
-  // 왕실/성별 관계
-  {cat:'남성', cx:-4,cy:4,cz:0, words:['왕','왕자','아버지','아들','남자','형','오빠','삼촌','할아버지','신랑','소년']},
-  {cat:'여성', cx:-4,cy:4,cz:3, words:['여왕','공주','어머니','딸','여자','언니','누나','이모','할머니','신부','소녀']},
-  // 동물-소리 관계
-  {cat:'동물', cx:0,cy:-5,cz:4, words:['고양이','개','소','돼지','닭','양','말','오리','사자','호랑이','코끼리','원숭이','뱀']},
-  {cat:'음식', cx:-3,cy:-4,cz:-3, words:['피자','김밥','라면','치킨','초밥','파스타','햄버거','떡볶이','비빔밥','스테이크','타코','카레','스시']},
-  // 과목-도구 관계
-  {cat:'과목', cx:3,cy:3,cz:-4, words:['수학','과학','영어','음악','미술','체육','역사','국어','물리','화학','생물','지리']},
-  // 감정 (양극성)
-  {cat:'감정', cx:-5,cy:-1,cz:-2, words:['행복','슬픔','분노','사랑','공포','놀람','기쁨','외로움','설렘','질투','감사','용기','희망','절망']},
-  // 직업-장소 관계
-  {cat:'직업', cx:0,cy:5,cz:-3, words:['의사','교사','요리사','경찰','소방관','과학자','프로그래머','변호사','간호사','기자','배우','가수']},
-  {cat:'장소', cx:0,cy:5,cz:0, words:['병원','학교','식당','경찰서','소방서','연구소','회사','법원','무대','방송국','극장','콘서트홀']},
-];
-
+// 유추가 작동하도록 쌍(pair)마다 일관된 방향 벡터를 사용
+// 수도 방향: y+3, 성별 방향: z+3, 장소 방향: x+3
 function srand2(s){return()=>{s=(s*16807+7)%2147483647;return s/2147483647;};}
 const rng2=srand2(777);
 const t2Words=[];
-t2Categories.forEach(c=>{
-  c.words.forEach(w=>{
-    t2Words.push({word:w, x:c.cx+(rng2()-.5)*2.5, y:c.cy+(rng2()-.5)*2.5, z:c.cz+(rng2()-.5)*2.5, cat:c.cat});
-  });
+const nr=()=>(rng2()-.5)*0.15; // 아주 작은 노이즈
+
+// 나라-수도 쌍: 각 나라가 충분히 떨어져야 유추가 정확함
+// 수도 방향: y+4 (일관됨)
+const countryPairs=[
+  ['한국','서울',-7],['일본','도쿄',-5],['중국','베이징',-3],['미국','워싱턴',-1],['영국','런던',1],
+  ['프랑스','파리',3],['독일','베를린',5],['이탈리아','로마',7],['스페인','마드리드',-6],
+  ['호주','캔버라',-4],['캐나다','오타와',-2],['인도','뉴델리',0],['태국','방콕',2],['멕시코','멕시코시티',4],['브라질','브라질리아',6]
+];
+countryPairs.forEach((p)=>{
+  const bx=p[2], by=-5, bz=-3;
+  t2Words.push({word:p[0], x:bx+nr(), y:by+nr(), z:bz+nr(), cat:'나라'});
+  t2Words.push({word:p[1], x:bx+nr(), y:by+4+nr(), z:bz+nr(), cat:'수도'});
 });
+
+// 남성-여성 쌍: 성별 방향: z+4
+const genderPairs=[
+  ['왕','여왕',-6],['왕자','공주',-4],['아버지','어머니',-2],['아들','딸',0],['남자','여자',2],
+  ['형','언니',4],['오빠','누나',6],['삼촌','이모',-5],['할아버지','할머니',-3],['신랑','신부',-1],['소년','소녀',1]
+];
+genderPairs.forEach((p)=>{
+  const bx=p[2], by=5, bz=-5;
+  t2Words.push({word:p[0], x:bx+nr(), y:by+nr(), z:bz+nr(), cat:'남성'});
+  t2Words.push({word:p[1], x:bx+nr(), y:by+nr(), z:bz+4+nr(), cat:'여성'});
+});
+
+// 직업-장소 쌍: 장소 방향: x+4
+const jobPairs=[
+  ['의사','병원',-6],['교사','학교',-4],['요리사','식당',-2],['경찰','경찰서',0],['소방관','소방서',2],
+  ['과학자','연구소',4],['프로그래머','회사',6],['변호사','법원',-5],['배우','극장',-3],['가수','콘서트홀',-1]
+];
+jobPairs.forEach((p)=>{
+  const bx=-5, by=p[2], bz=5;
+  t2Words.push({word:p[0], x:bx+nr(), y:by+nr(), z:bz+nr(), cat:'직업'});
+  t2Words.push({word:p[1], x:bx+4+nr(), y:by+nr(), z:bz+nr(), cat:'장소'});
+});
+
+// 동물, 음식, 감정 (독립 클러스터)
+['고양이','개','소','돼지','닭','양','말','사자','호랑이','코끼리'].forEach((w,i)=>{
+  t2Words.push({word:w, x:6+nr(), y:-6+i*1.2+nr(), z:-1+nr(), cat:'동물'});
+});
+['피자','김밥','라면','치킨','초밥','파스타','햄버거','떡볶이'].forEach((w,i)=>{
+  t2Words.push({word:w, x:-7+nr(), y:-7+i*1.4+nr(), z:-7+nr(), cat:'음식'});
+});
+['행복','슬픔','분노','사랑','공포','기쁨','희망','절망'].forEach((w,i)=>{
+  t2Words.push({word:w, x:7+nr(), y:7+nr(), z:-7+i*1.2+nr(), cat:'감정'});
+});
+
+const catColors = {'나라':'#e63946','수도':'#ff6b81','남성':'#2979ff','여성':'#74b9ff','동물':'#2ecc71','음식':'#e67e22','직업':'#f39c12','장소':'#f1c40f','감정':'#9b59b6'};
+const catNames = ['나라','수도','남성','여성','직업','장소','동물','음식','감정'];
 
 // One-hot positions: spread on axes
 const t2OnehotPos = t2Words.map((w, i) => {
@@ -1065,38 +1093,27 @@ function tEDraw3D(result) {
     });
   });
 
-  // A point (red)
+  // A, B, C, 결과, 정답 — 심플한 점+텍스트
   traces.push({x:[a.x],y:[a.y],z:[a.z], mode:'markers+text', type:'scatter3d',
-    text:['A: '+result.aWord], textposition:'top right', textfont:{size:11,color:'#e63946'},
-    marker:{size:6,color:'#e63946',line:{width:1,color:'#fff'}}, showlegend:false});
-  // B point (orange)
+    text:[result.aWord], textposition:'top center', textfont:{size:12,color:'#e63946'},
+    marker:{size:8,color:'#e63946'}, showlegend:false});
   traces.push({x:[b.x],y:[b.y],z:[b.z], mode:'markers+text', type:'scatter3d',
-    text:['−B: '+result.bWord], textposition:'top left', textfont:{size:11,color:'#e67e22'},
-    marker:{size:6,color:'#e67e22',line:{width:1,color:'#fff'}}, showlegend:false});
-  // C point (blue)
+    text:[result.bWord], textposition:'top center', textfont:{size:12,color:'#e67e22'},
+    marker:{size:8,color:'#e67e22'}, showlegend:false});
   traces.push({x:[c.x],y:[c.y],z:[c.z], mode:'markers+text', type:'scatter3d',
-    text:['+C: '+result.cWord], textposition:'bottom right', textfont:{size:11,color:'#2979ff'},
-    marker:{size:6,color:'#2979ff',line:{width:1,color:'#fff'}}, showlegend:false});
-  // Result vector (green diamond)
+    text:[result.cWord], textposition:'top center', textfont:{size:12,color:'#2979ff'},
+    marker:{size:8,color:'#2979ff'}, showlegend:false});
   traces.push({x:[rv.x],y:[rv.y],z:[rv.z], mode:'markers+text', type:'scatter3d',
-    text:['= 결과'], textposition:'top center', textfont:{size:11,color:'#2ecc71'},
-    marker:{size:8,color:'#2ecc71',symbol:'diamond',line:{width:2,color:'#fff'}}, showlegend:false});
-  // Best match (gold)
+    text:['결과'], textposition:'top center', textfont:{size:12,color:'#2ecc71'},
+    marker:{size:10,color:'#2ecc71'}, showlegend:false});
   if(bestW) {
     traces.push({x:[bestW.x],y:[bestW.y],z:[bestW.z], mode:'markers+text', type:'scatter3d',
-      text:['★ '+best.word], textposition:'bottom center', textfont:{size:11,color:'#f1c40f'},
-      marker:{size:7,color:'#f1c40f',symbol:'diamond',line:{width:1,color:'#fff'}}, showlegend:false});
+      text:[best.word+'!'], textposition:'bottom center', textfont:{size:13,color:'#f1c40f'},
+      marker:{size:10,color:'#f1c40f'}, showlegend:false});
+    // 결과→정답 점선
     traces.push({x:[rv.x,bestW.x],y:[rv.y,bestW.y],z:[rv.z,bestW.z], mode:'lines', type:'scatter3d',
       line:{color:'#2ecc71',width:2,dash:'dash'}, showlegend:false, hoverinfo:'skip'});
   }
-
-  // Lines: A→B (orange), B→C (blue), C→Result (green)
-  traces.push({x:[a.x,b.x],y:[a.y,b.y],z:[a.z,b.z], mode:'lines', type:'scatter3d',
-    line:{color:'#e67e22',width:3}, showlegend:false, hoverinfo:'skip'});
-  traces.push({x:[b.x,c.x],y:[b.y,c.y],z:[b.z,c.z], mode:'lines', type:'scatter3d',
-    line:{color:'#2979ff',width:3}, showlegend:false, hoverinfo:'skip'});
-  traces.push({x:[c.x,rv.x],y:[c.y,rv.y],z:[c.z,rv.z], mode:'lines', type:'scatter3d',
-    line:{color:'#2ecc71',width:3}, showlegend:false, hoverinfo:'skip'});
 
   Plotly.react('plotlyAnalogy', traces, {
     paper_bgcolor:bg, plot_bgcolor:bg,
